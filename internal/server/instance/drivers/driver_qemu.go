@@ -3158,7 +3158,7 @@ func (d *qemu) generateConfigShare() error {
 		return err
 	}
 
-	// This only matters for Linux systems.
+	// OS-specific configuration.
 	if d.isLinux() {
 		// Systemd units.
 		err = os.MkdirAll(filepath.Join(configDrivePath, "systemd"), 0o500)
@@ -3182,7 +3182,7 @@ func (d *qemu) generateConfigShare() error {
 		// Setup script for incus-agent that is executed by the incus-agent systemd unit before incus-agent is started.
 		// The script sets up a temporary mount point, copies data from the mount (including incus-agent binary),
 		// and then unmounts it. It also ensures appropriate permissions for the Incus agent's runtime directory.
-		agentFile, err = incusAgentLoader.ReadFile("agent-loader/incus-agent-setup")
+		agentFile, err = incusAgentLoader.ReadFile("agent-loader/incus-agent-setup-linux")
 		if err != nil {
 			return err
 		}
@@ -3209,7 +3209,48 @@ func (d *qemu) generateConfigShare() error {
 		}
 
 		// Install script for manual installs.
-		agentFile, err = incusAgentLoader.ReadFile("agent-loader/install.sh")
+		agentFile, err = incusAgentLoader.ReadFile("agent-loader/install-linux.sh")
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(configDrivePath, "install.sh"), agentFile, 0o700)
+		if err != nil {
+			return err
+		}
+	} else if d.isDarwin() {
+		// Launchd daemons.
+		err = os.MkdirAll(filepath.Join(configDrivePath, "launchd"), 0o500)
+		if err != nil {
+			return err
+		}
+
+		// Launchd daemon for incus-agent.
+		agentFile, err := incusAgentLoader.ReadFile("agent-loader/launchd/org.linuxcontainers.incus.darwin-agent.plist")
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(configDrivePath, "launchd", "org.linuxcontainers.incus.darwin-agent.plist"), agentFile, 0o644)
+		if err != nil {
+			return err
+		}
+
+		// Setup script for incus-agent that is executed by launchd. For convenience, this script also
+		// launches the agent. Because of Apple TCC, sh must be given full disk access in the relevant
+		// system settings page. Other than that, this agent behaves roughly the same as the Linux one.
+		agentFile, err = incusAgentLoader.ReadFile("agent-loader/incus-agent-setup-darwin")
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(configDrivePath, "incus-agent-setup"), agentFile, 0o500)
+		if err != nil {
+			return err
+		}
+
+		// Install script for manual installs.
+		agentFile, err = incusAgentLoader.ReadFile("agent-loader/install-darwin.sh")
 		if err != nil {
 			return err
 		}
@@ -3473,17 +3514,22 @@ func (d *qemu) isWindows() bool {
 	return strings.Contains(strings.ToLower(d.expandedConfig["image.os"]), "windows")
 }
 
-// isLinux returns whether the VM is Linux. This is the default if no `image.os` is provided.
-func (d *qemu) isLinux() bool {
+// isDarwin returns whether the VM is Darwin.
+func (d *qemu) isDarwin() bool {
 	imageOS := strings.ToLower(d.expandedConfig["image.os"])
-	keywords := []string{"darwin", "mac os", "macos", "windows"}
+	keywords := []string{"darwin", "mac os", "macos"}
 	for _, keyword := range keywords {
 		if strings.Contains(imageOS, keyword) {
-			return false
+			return true
 		}
 	}
 
-	return true
+	return false
+}
+
+// isLinux returns whether the VM is Linux. This is the default if no `image.os` is provided.
+func (d *qemu) isLinux() bool {
+	return !d.isWindows() && !d.isDarwin()
 }
 
 // supportsVirtioVsock returns whether the agent supports talking through VirtIO vsock.
