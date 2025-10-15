@@ -366,7 +366,7 @@ func (d *qemu) qmpConnect() (*qmp.Monitor, error) {
 // Callers should check that the instance is running (and therefore mounted) before calling this function,
 // otherwise the qmp.Connect call will fail to use the monitor socket file.
 func (d *qemu) getAgentClient() (*http.Client, error) {
-	if d.isWindows() {
+	if !d.supportsVirtioVsock() {
 		// Get known network details.
 		networks, err := d.getNetworkState()
 		if err != nil {
@@ -3042,7 +3042,6 @@ func (d *qemu) spiceCmdlineConfig() string {
 // inside the VM's config volume so that it can be restricted by quota.
 // Requires the instance be mounted before calling this function.
 func (d *qemu) generateConfigShare() error {
-	isWindows := d.isWindows()
 	configDrivePath := filepath.Join(d.Path(), "config")
 
 	// Create config drive dir if doesn't exist, if it does exist, leave it around so we don't regenerate all
@@ -3052,7 +3051,8 @@ func (d *qemu) generateConfigShare() error {
 		return err
 	}
 
-	if !isWindows {
+	// Windows doesn't handle shares.
+	if !d.isWindows() {
 		// Add the VM agent loader.
 		agentSrcPath, _ := exec.LookPath("incus-agent")
 		if util.PathExists(os.Getenv("INCUS_AGENT_PATH")) {
@@ -3067,13 +3067,11 @@ func (d *qemu) generateConfigShare() error {
 				return err
 			}
 
-			if !isWindows {
-				// Legacy support.
-				_ = os.Remove(filepath.Join(configDrivePath, "lxd-agent"))
-				err = os.Symlink("incus-agent", filepath.Join(configDrivePath, "lxd-agent"))
-				if err != nil {
-					return err
-				}
+			// Legacy support.
+			_ = os.Remove(filepath.Join(configDrivePath, "lxd-agent"))
+			err = os.Symlink("incus-agent", filepath.Join(configDrivePath, "lxd-agent"))
+			if err != nil {
+				return err
 			}
 		} else if agentSrcPath != "" {
 			// Install agent into config drive dir if found.
@@ -3160,7 +3158,8 @@ func (d *qemu) generateConfigShare() error {
 		return err
 	}
 
-	if !isWindows {
+	// This only matters for Linux systems.
+	if d.isLinux() {
 		// Systemd units.
 		err = os.MkdirAll(filepath.Join(configDrivePath, "systemd"), 0o500)
 		if err != nil {
@@ -3263,7 +3262,8 @@ func (d *qemu) generateConfigShare() error {
 		}
 	}
 
-	if !isWindows {
+	// Only Linux guests support dynamic NIC configuration.
+	if d.isLinux() {
 		// Clear NICConfigDir to ensure that no leftover configuration is erroneously applied by the agent.
 		nicConfigPath := filepath.Join(configDrivePath, deviceConfig.NICConfigDir)
 		_ = os.RemoveAll(nicConfigPath)
@@ -3471,6 +3471,25 @@ func (d *qemu) deviceBootPriorities(base int) (map[string]int, error) {
 // isWindows returns whether the VM is Windows.
 func (d *qemu) isWindows() bool {
 	return strings.Contains(strings.ToLower(d.expandedConfig["image.os"]), "windows")
+}
+
+// isLinux returns whether the VM is Linux. This is the default if no `image.os` is provided.
+func (d *qemu) isLinux() bool {
+	imageOS := strings.ToLower(d.expandedConfig["image.os"])
+	keywords := []string{"darwin", "mac os", "macos", "windows"}
+	for _, keyword := range keywords {
+		if strings.Contains(imageOS, keyword) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// supportsVirtioVsock returns whether the agent supports talking through VirtIO vsock.
+// For now, we only support it on Linux.
+func (d *qemu) supportsVirtioVsock() bool {
+	return d.isLinux()
 }
 
 func (d *qemu) getStartupRTCAdjustment() time.Duration {
@@ -3980,7 +3999,7 @@ func (d *qemu) generateQemuConfig(machineDefinition string, cpuType string, cpuI
 		bus.allocate(busFunctionGroupNone)
 	}
 
-	if !d.isWindows() {
+	if !isWindows {
 		// Write the agent mount config.
 		agentMountJSON, err := json.Marshal(agentMounts)
 		if err != nil {
