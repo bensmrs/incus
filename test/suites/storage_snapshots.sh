@@ -243,6 +243,10 @@ test_storage_volume_snapshots() {
 
     incus storage volume delete "${storage_pool}" "vol1"
     incus project delete "project1"
+
+    # FIXME: LINSTOR requires this sleep for now.
+    sleep 5
+
     incus storage delete "${storage_pool}"
     incus remote remove "test"
 
