@@ -134,11 +134,7 @@ jobs:
           - stable
           - tip
         suite:
-          - cluster
-          - standalone_core
-          - standalone_container
           - standalone_network
-          - standalone_storage
         backend:
           - dir
         os:

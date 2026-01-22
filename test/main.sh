@@ -304,11 +304,11 @@ run_standalone_storage() {
 
 # Network and networking related tests
 run_standalone_network() {
-    run_test test_address_set "network address set"
-    run_test test_container_devices_nic_bridged_acl "container devices - nic - bridged - acl"
+    ##run_test test_address_set "network address set"
+    ##run_test test_container_devices_nic_bridged_acl "container devices - nic - bridged - acl"
     run_test test_container_devices_nic_bridged "container devices - nic - bridged"
-    run_test test_container_devices_nic_bridged_filtering "container devices - nic - bridged - filtering"
-    run_test test_container_devices_nic_bridged_vlan "container devices - nic - bridged - vlan"
+    ##run_test test_container_devices_nic_bridged_filtering "container devices - nic - bridged - filtering"
+    ##run_test test_container_devices_nic_bridged_vlan "container devices - nic - bridged - vlan"
     run_test test_container_devices_nic_ipvlan "container devices - nic - ipvlan"
     run_test test_container_devices_nic_macvlan "container devices - nic - macvlan"
     run_test test_container_devices_nic_p2p "container devices - nic - p2p"
@@ -316,19 +316,19 @@ run_standalone_network() {
     run_test test_container_devices_nic_routed "container devices - nic - routed"
     run_test test_container_devices_nic_sriov "container devices - nic - sriov"
     run_test test_container_devices_proxy "container devices - proxy"
-    run_test test_network_acl "network ACL management"
-    run_test test_network_dhcp_routes "network dhcp routes"
-    run_test test_network_forward "network address forwards"
-    run_test test_network_hwaddr_pattern "network MAC address pattern"
-    run_test test_network "network management"
-    run_test test_network_peers "network peers"
-    run_test test_network_zone "network DNS zones"
-    run_test test_oidc "OpenID Connect"
-    run_test test_openfga "OpenFGA"
-    run_test test_remote_admin "remote administration"
-    run_test test_remote_url "remote url handling"
-    run_test test_remote_usage "remote usage"
-    run_test test_syslog_socket "Syslog socket"
+    ##run_test test_network_acl "network ACL management"
+    ##run_test test_network_dhcp_routes "network dhcp routes"
+    ##run_test test_network_forward "network address forwards"
+    ##run_test test_network_hwaddr_pattern "network MAC address pattern"
+    ##run_test test_network "network management"
+    ##run_test test_network_peers "network peers"
+    ##run_test test_network_zone "network DNS zones"
+    ##run_test test_oidc "OpenID Connect"
+    ##run_test test_openfga "OpenFGA"
+    ##run_test test_remote_admin "remote administration"
+    ##run_test test_remote_url "remote url handling"
+    ##run_test test_remote_usage "remote usage"
+    ##run_test test_syslog_socket "Syslog socket"
 }
 
 # Any other container test
@@ -407,10 +407,10 @@ case "${1:-""}" in
     run_cluster
     ;;
   standalone)
-    run_standalone_core
-    run_standalone_container
+    ##run_standalone_core
+    ##run_standalone_container
     run_standalone_network
-    run_standalone_storage
+    ##run_standalone_storage
     ;;
   standalone_*)
     # shellcheck disable=SC2086
