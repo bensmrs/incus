@@ -348,6 +348,10 @@ func (d *qemu) cpuType(bs *qemuBootState) (string, error) {
 	}
 
 	cpuType := "host"
+	// For now, we only support the `max` CPU type on LA64.
+	if d.architecture == osarch.ARCH_64BIT_LOONGARCH {
+		cpuType = "max"
+	}
 
 	// Handle CPU flags.
 	if d.state.ServerClustered && d.CanLiveMigrate() {
