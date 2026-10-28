@@ -2110,10 +2110,19 @@
 						}
 					},
 					{
+						"driver": {
+							"default": "`default`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "VFIO driver to register the NIC with (`default` for the generic `vfio-pci`, `mlx5` for `mlx5_vfio_pci`)",
+							"type": "string"
+						}
+					},
+					{
 						"failover": {
 							"longdesc": "",
 							"required": "no",
-							"shortdesc": "Failover bridge to use when live-migrating the NIC",
+							"shortdesc": "Failover bridge to use when live-migrating the NIC (implicitly sets `migration=failover`)",
 							"type": "string"
 						}
 					},
@@ -2123,6 +2132,15 @@
 							"longdesc": "",
 							"managed": "no",
 							"shortdesc": "The MAC address of the new interface",
+							"type": "string"
+						}
+					},
+					{
+						"migration": {
+							"default": "`none` if `failover` is unset, else `failover`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Live migration method, either `none` to keep live migration disabled, `failover` for `virtio-net` failover, or `native` for native live migration",
 							"type": "string"
 						}
 					},
@@ -5604,11 +5622,27 @@
 			"common": {
 				"keys": [
 					{
+						"driver": {
+							"default": "`default`",
+							"longdesc": "",
+							"shortdesc": "VFIO driver to register `sriov` NICs with (`default` for the generic `vfio-pci`, `mlx5` for `mlx5_vfio_pci`)",
+							"type": "string"
+						}
+					},
+					{
 						"failover": {
 							"condition": "-",
 							"longdesc": "",
 							"scope": "local",
-							"shortdesc": "Failover bridge to use when live-migrating `sriov` NICs",
+							"shortdesc": "Failover bridge to use when live-migrating `sriov` NICs (implicitly sets `migration=failover`)",
+							"type": "string"
+						}
+					},
+					{
+						"migration": {
+							"default": "`none` if `failover` is unset, else `failover`",
+							"longdesc": "",
+							"shortdesc": "Live migration method, either `none` to keep live migration disabled, `failover` for `virtio-net` failover, or `native` for native live migration",
 							"type": "string"
 						}
 					},
