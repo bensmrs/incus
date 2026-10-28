@@ -159,15 +159,33 @@ func (d *nicSRIOV) validateConfig(instConf instance.ConfigReader, partialValidat
 		// ---
 		// type: string
 		// required: no
-		// shortdesc: Failover bridge to use when live-migrating the NIC
+		// shortdesc: Failover bridge to use when live-migrating the NIC (implicitly sets `migration=failover`)
 		"failover",
+
+		// gendoc:generate(entity=devices, group=nic_sriov, key=migration)
+		//
+		// ---
+		// type: string
+		// default: `none` if `failover` is unset, else `failover`
+		// required: no
+		// shortdesc: Live migration method, either `none` to keep live migration disabled, `failover` for `virtio-net` failover, or `native` for native live migration
+		"migration",
+
+		// gendoc:generate(entity=devices, group=nic_sriov, key=driver)
+		//
+		// ---
+		// type: string
+		// default: `default`
+		// required: no
+		// shortdesc: VFIO driver to register the NIC with (`default` for the generic `vfio-pci`, `mlx5` for `mlx5_vfio_pci`)
+		"driver",
 	}
 
 	// Check that if network property is set that conflicting keys are not present.
 	if d.config["network"] != "" {
 		requiredFields = append(requiredFields, "network")
 
-		bannedKeys := []string{"nictype", "parent", "mtu", "vlan", "failover"}
+		bannedKeys := []string{"nictype", "parent", "mtu", "vlan", "failover", "migration", "driver"}
 		for _, bannedKey := range bannedKeys {
 			if d.config[bannedKey] != "" {
 				return fmt.Errorf("Cannot use %q property in conjunction with %q property", bannedKey, "network")
@@ -196,7 +214,7 @@ func (d *nicSRIOV) validateConfig(instConf instance.ConfigReader, partialValidat
 		d.config["parent"] = netConfig["parent"]
 
 		// Copy certain keys verbatim from the network's settings.
-		inheritKeys := []string{"mtu", "vlan", "failover"}
+		inheritKeys := []string{"mtu", "vlan", "failover", "migration", "driver"}
 		for _, inheritKey := range inheritKeys {
 			_, found := netConfig[inheritKey]
 			if found {
@@ -244,6 +262,20 @@ func (d *nicSRIOV) validateConfig(instConf instance.ConfigReader, partialValidat
 		}
 	}
 
+	if d.config["failover"] != "" {
+		if d.config["migration"] != "" && d.config["migration"] != "failover" {
+			return fmt.Errorf("Cannot use a failover bridge with migration=%s", d.config["migration"])
+		}
+
+		d.config["migration"] = "failover"
+	} else if d.config["migration"] == "failover" {
+		return errors.New("Setting migration=failover requires setting a failover bridge")
+	}
+
+	if d.config["migration"] == "native" && (d.config["driver"] == "" || d.config["driver"] == "default") {
+		return errors.New("Cannot use native migration without specifying a live-migratable VFIO driver")
+	}
+
 	return nil
 }
 
@@ -264,8 +296,8 @@ func (d *nicSRIOV) PreStartCheck() error {
 
 // validateEnvironment checks the runtime environment for correctness.
 func (d *nicSRIOV) validateEnvironment() error {
-	if d.inst.Type() == instancetype.VM && util.IsTrue(d.inst.ExpandedConfig()["migration.stateful"]) && d.config["failover"] == "" {
-		return errors.New("Network SR-IOV devices cannot be used when migration.stateful is enabled and no failover network is specified")
+	if d.inst.Type() == instancetype.VM && util.IsTrue(d.inst.ExpandedConfig()["migration.stateful"]) && (d.config["migration"] == "" || d.config["migration"] == "none") {
+		return errors.New("Network SR-IOV devices cannot be used when migration.stateful is enabled without a live migration strategy")
 	}
 
 	if d.inst.Type() == instancetype.Container && d.config["name"] == "" {
@@ -301,11 +333,16 @@ func (d *nicSRIOV) Start() (*deviceConfig.RunConfig, error) {
 
 	saveData := make(map[string]string)
 
-	// If VM, then try and load the vfio-pci module first.
+	// If VM, then try and load the relevant module first.
+	driver := "vfio-pci"
 	if d.inst.Type() == instancetype.VM {
-		err = linux.LoadModule("vfio-pci")
+		if d.config["driver"] == "mlx5" {
+			driver = "mlx5_vfio_pci"
+		}
+
+		err = linux.LoadModule(driver)
 		if err != nil {
-			return nil, fmt.Errorf("Error loading %q module: %w", "vfio-pci", err)
+			return nil, fmt.Errorf("Error loading %q module: %w", driver, err)
 		}
 	}
 
@@ -341,7 +378,7 @@ func (d *nicSRIOV) Start() (*deviceConfig.RunConfig, error) {
 	}
 
 	// Claim the SR-IOV virtual function (VF) on the parent (PF) and get the PCI information.
-	vfPCIDev, pciIOMMUGroup, err := networkSRIOVSetupVF(d.deviceCommon, parent, vfDev, vfID, saveData, "vfio-pci")
+	vfPCIDev, pciIOMMUGroup, err := networkSRIOVSetupVF(d.deviceCommon, parent, vfDev, vfID, saveData, driver)
 	if err != nil {
 		network.SRIOVVirtualFunctionMutex.Unlock()
 		return nil, err
@@ -385,6 +422,7 @@ func (d *nicSRIOV) Start() (*deviceConfig.RunConfig, error) {
 				{Key: "devName", Value: d.name},
 				{Key: "pciSlotName", Value: vfPCIDev.SlotName},
 				{Key: "pciIOMMUGroup", Value: fmt.Sprintf("%d", pciIOMMUGroup)},
+				{Key: "migration", Value: d.config["migration"]},
 			}...)
 	}
 
