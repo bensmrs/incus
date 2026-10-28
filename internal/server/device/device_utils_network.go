@@ -17,6 +17,7 @@ import (
 
 	"github.com/mdlayher/arp"
 	"github.com/mdlayher/ndp"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/lxc/incus/v7/internal/server/bgp"
@@ -1320,6 +1321,43 @@ func networkSRIOVSetupVF(d deviceCommon, vfParent string, vfDevice string, vfID 
 				return vfPCIDev, 0, fmt.Errorf("Failed setting MAC for VF %q: %w", volatile["last_state.vf.id"], err)
 			}
 		}
+	}
+
+	// FIXME: setup migration bit.
+	pfPath, err := os.Readlink(fmt.Sprintf("/sys/class/net/%s/device", vfParent))
+	if err != nil {
+		return vfPCIDev, 0, fmt.Errorf("Failed looking up PF device %q: %w", vfParent, err)
+	}
+
+	ports, err := netlink.DevLinkGetPortList("pci", filepath.Base(pfPath))
+	if err != nil {
+		return vfPCIDev, 0, fmt.Errorf("Failed listing devlink ports of PF %q: %w", vfParent, err)
+	}
+
+	for _, port := range ports {
+		if port.VfNumber == nil || int(*port.VfNumber) != vfID {
+			continue
+		}
+
+		if !port.Fn.MigratableSupported {
+			return vfPCIDev, 0, fmt.Errorf("VF device %q is not live-migratable", vfPCIDev.SlotName)
+		}
+
+		if !port.Fn.Migratable {
+			err = netlink.DevlinkPortFnSet(port.BusName, port.DeviceName, port.PortIndex, netlink.DevlinkPortFnSetAttrs{
+				FnAttrs:         netlink.DevlinkPortFn{Migratable: true},
+				MigratableValid: true,
+			})
+			if err != nil {
+				return vfPCIDev, 0, fmt.Errorf("Failed making VF device %q live-migratable: %w", vfPCIDev.SlotName)
+			}
+
+			reverter.Add(func() {
+				_ = netlink.DevlinkPortFnSet(port.BusName, port.DeviceName, port.PortIndex, netlink.DevlinkPortFnSetAttrs{MigratableValid: true})
+			})
+		}
+
+		break
 	}
 
 	// pciIOMMUGroup, used for VM physical passthrough.

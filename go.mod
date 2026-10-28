@@ -184,3 +184,5 @@ require (
 	google.golang.org/grpc v1.84.0 // indirect
 	moul.io/http2curl/v2 v2.3.0 // indirect
 )
+
+replace github.com/vishvananda/netlink => ../netlink
