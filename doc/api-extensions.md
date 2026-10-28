@@ -3602,3 +3602,12 @@ endpoints and WebSocket connections. The cookie is `Secure`, `HttpOnly` and
 This adds the `cluster.healing_delay` server configuration key and the `cluster-member-offline` event.
 
 When cluster healing detects an offline member, the event is sent immediately and the evacuation only starts once the delay has elapsed, giving external tooling time to power the member off.
+
+## `nic_sriov_migration_native`
+
+This adds two new optional configuration keys to both `sriov` networks and NICs:
+
+* `migration`, which can be set to `none` (the default) to disable live migration, `failover` (requiring the `failover` key to be set, in which case this becomes the default) to use `virtio-net` failover, or `native` to use native VFIO migration.
+* `driver`, which sets the VFIO driver to use, either `default` for the generic `vfio-pci` driver, or `mlx5` for `mlx5_vfio_pci`.
+
+Together they allow native VFIO live-migration of SR-IOV NICs.
