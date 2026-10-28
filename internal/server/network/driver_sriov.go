@@ -1,6 +1,7 @@
 package network
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/lxc/incus/v7/internal/server/cluster/request"
@@ -55,8 +56,24 @@ func (n *sriov) Validate(config map[string]string, clientType request.ClientType
 		// type: string
 		// scope: local
 		// condition: -
-		// shortdesc: Failover bridge to use when live-migrating `sriov` NICs
+		// shortdesc: Failover bridge to use when live-migrating `sriov` NICs (implicitly sets `migration=failover`)
 		"failover": validate.Optional(validate.IsInterfaceName),
+
+		// gendoc:generate(entity=network_sriov, group=common, key=migration)
+		//
+		// ---
+		// type: string
+		// default: `none` if `failover` is unset, else `failover`
+		// shortdesc: Live migration method, either `none` to keep live migration disabled, `failover` for `virtio-net` failover, or `native` for native live migration
+		"migration": validate.Optional(validate.IsOneOf("none", "failover", "native")),
+
+		// gendoc:generate(entity=network_sriov, group=common, key=driver)
+		//
+		// ---
+		// type: string
+		// default: `default`
+		// shortdesc: VFIO driver to register `sriov` NICs with (`default` for the generic `vfio-pci`, `mlx5` for `mlx5_vfio_pci`)
+		"driver": validate.Optional(validate.IsOneOf("default", "mlx5")),
 
 		// gendoc:generate(entity=network_sriov, group=common, key=user.*)
 		//
@@ -69,6 +86,18 @@ func (n *sriov) Validate(config map[string]string, clientType request.ClientType
 	err := n.validate(config, rules)
 	if err != nil {
 		return err
+	}
+
+	if n.config["failover"] != "" && n.config["migration"] != "" && n.config["migration"] != "failover" {
+		return fmt.Errorf("Cannot use a failover bridge with migration=%s", n.config["migration"])
+	}
+
+	if n.config["failover"] == "" && n.config["migration"] == "failover" {
+		return errors.New("Setting migration=failover requires setting a failover bridge")
+	}
+
+	if n.config["migration"] == "native" && (n.config["driver"] == "" || n.config["driver"] == "default") {
+		return errors.New("Cannot use native migration without specifying a live-migratable VFIO driver")
 	}
 
 	return nil
